@@ -1,4 +1,4 @@
-# FedPred: Decentralized Multi-Task Federated Healthcare Platform
+# HealthSync: Decentralized Multi-Task Federated Healthcare Platform
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C.svg)](https://pytorch.org/)
@@ -9,7 +9,7 @@
 
 > **"Your data stays with your hospital. Only model updates are shared."**
 
-**FedPred** is an enterprise-grade clinical AI platform designed for privacy-preserving collaborative learning across decentralized hospital networks. Built on MIMIC-IV clinical datasets, FedPred trains a dual-head multi-task PyTorch neural network to simultaneously predict **Cardiovascular Disease (CVD)** and **Type 2 Diabetes** risk without centralizing sensitive Electronic Health Records (EHR).
+**HealthSync** is an enterprise-grade clinical AI platform designed for privacy-preserving collaborative learning across decentralized hospital networks. Built on MIMIC-IV clinical datasets, HealthSync trains a dual-head multi-task PyTorch neural network to simultaneously predict **Cardiovascular Disease (CVD)** and **Type 2 Diabetes** risk without centralizing sensitive Electronic Health Records (EHR).
 
 ---
 
@@ -64,7 +64,7 @@
 ## Repository Structure
 
 ```
-FedPred/
+HealthSync/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI application & middleware configuration
@@ -200,4 +200,4 @@ FedPred/
 
 ## Research & Clinical Disclaimer
 
-> **Notice**: FedPred is developed for academic research, algorithmic demonstration, and technical evaluation of federated multi-task learning and Explainable AI. It does not constitute a certified medical diagnostic device and should not be used as the sole basis for clinical diagnosis or treatment planning.
+> **Notice**: HealthSync is developed for academic research, algorithmic demonstration, and technical evaluation of federated multi-task learning and Explainable AI. It does not constitute a certified medical diagnostic device and should not be used as the sole basis for clinical diagnosis or treatment planning.

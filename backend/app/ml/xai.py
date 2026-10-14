@@ -1,5 +1,5 @@
 """
-Explainable AI (XAI) Engine for FedPred Multi-Task Architecture.
+Explainable AI (XAI) Engine for HealthSync Multi-Task Architecture.
 Implements:
 1. Integrated Gradients (Sundararajan et al., 2017) for exact path attributions.
 2. Local Patient Waterfall Explanations (Base Risk + Feature Shifts = Predicted Risk).
@@ -120,6 +120,7 @@ FEATURE_METADATA: Dict[str, Dict[str, Any]] = {
     },
 }
 
+
 def integrated_gradients(
     model: torch.nn.Module,
     x_input: torch.Tensor,
@@ -135,18 +136,18 @@ def integrated_gradients(
         base_prob: float (predicted probability for baseline)
     """
     model.eval()
-    
+
     # Path interpolation: x' + (k / m) * (x - x')
     alphas = torch.linspace(0.0, 1.0, steps + 1, device=x_input.device).view(-1, 1)
     # Shape: (steps + 1, 12)
     path = baseline + alphas * (x_input - baseline)
     path.requires_grad_(True)
-    
+
     # Forward pass
     diab_logits, cvd_logits = model(path)
     logits = cvd_logits if task in ["heart", "cvd"] else diab_logits
     probs = torch.sigmoid(logits)
-    
+
     # Backpropagate sum of probabilities along the path
     grad_outputs = torch.ones_like(probs)
     grads = torch.autograd.grad(
@@ -155,17 +156,20 @@ def integrated_gradients(
         grad_outputs=grad_outputs,
         create_graph=False,
         retain_graph=False,
-    )[0] # Shape: (steps + 1, 12)
-    
+    )[
+        0
+    ]  # Shape: (steps + 1, 12)
+
     # Trapezoidal approximation of path integral
     avg_grads = torch.mean(grads[:-1] + grads[1:], dim=0) * 0.5
     delta = (x_input - baseline).squeeze(0)
     attributions = (delta * avg_grads).detach().cpu().numpy()
-    
+
     pred_prob = float(probs[-1].detach().cpu().item())
     base_prob = float(probs[0].detach().cpu().item())
-    
+
     return attributions, pred_prob, base_prob
+
 
 def explain_patient_prediction(
     raw_features: Dict[str, Any],
@@ -182,46 +186,54 @@ def explain_patient_prediction(
     mapped = map_raw_features(raw_features)
     x_std = standardize_features(raw_features)
     x_tensor = torch.tensor(x_std, dtype=torch.float32, device=engine.device)
-    
+
     # 2. Healthy population baseline (standardized 0 vector = population median/mean)
     baseline_tensor = torch.zeros_like(x_tensor)
-    
+
     # 3. Compute Integrated Gradients
     engine.model.eval()
     attrs, pred_prob, base_prob = integrated_gradients(
         engine.model, x_tensor, baseline_tensor, task=task, steps=50
     )
-    
+
     threshold = THRESHOLDS.get(task, 0.20)
-    
+
     # 4. Format feature contributions
     features_breakdown: List[Dict[str, Any]] = []
     for i, col in enumerate(FEATURE_COLUMNS):
         meta = FEATURE_METADATA.get(col, {})
         val = mapped.get(col, FEATURE_MEDIANS.get(col, 0.0))
         attr_val = float(attrs[i])
-        
+
         # Clinical risk direction: > 0 means pushing risk higher; < 0 means protective
-        effect = "risk_driver" if attr_val > 0.005 else ("protective" if attr_val < -0.005 else "neutral")
-        
-        features_breakdown.append({
-            "feature": col,
-            "displayName": meta.get("displayName", col),
-            "unit": meta.get("unit", ""),
-            "category": meta.get("category", "General"),
-            "value": round(val, 2),
-            "normalRange": meta.get("normalRange", ""),
-            "modifiable": meta.get("modifiable", False),
-            "attribution": round(attr_val, 4),
-            "attributionPercent": round(attr_val * 100, 2),
-            "effect": effect,
-        })
-        
+        effect = (
+            "risk_driver"
+            if attr_val > 0.005
+            else ("protective" if attr_val < -0.005 else "neutral")
+        )
+
+        features_breakdown.append(
+            {
+                "feature": col,
+                "displayName": meta.get("displayName", col),
+                "unit": meta.get("unit", ""),
+                "category": meta.get("category", "General"),
+                "value": round(val, 2),
+                "normalRange": meta.get("normalRange", ""),
+                "modifiable": meta.get("modifiable", False),
+                "attribution": round(attr_val, 4),
+                "attributionPercent": round(attr_val * 100, 2),
+                "effect": effect,
+            }
+        )
+
     # Sort breakdown by absolute impact
-    sorted_by_impact = sorted(features_breakdown, key=lambda x: abs(x["attribution"]), reverse=True)
+    sorted_by_impact = sorted(
+        features_breakdown, key=lambda x: abs(x["attribution"]), reverse=True
+    )
     top_drivers = [f for f in sorted_by_impact if f["attribution"] > 0][:4]
     top_protective = [f for f in sorted_by_impact if f["attribution"] < 0][:3]
-    
+
     # 5. Counterfactual "What-If" Recourse Analysis
     recourse_suggestions = []
     if pred_prob >= threshold:
@@ -231,86 +243,114 @@ def explain_patient_prediction(
             meta = FEATURE_METADATA.get(col, {})
             if meta.get("modifiable", False) and item["attribution"] > 0.0005:
                 cur_val = item["value"]
-                
+
                 # Clinical target suggestions
                 if col == "systolic_bp" and cur_val > 120:
                     target_val = 118.0
-                    impact_est = max(2.5, round(abs(item["attributionPercent"]) * 0.8, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{int(cur_val)} {meta['unit']}",
-                        "targetValue": f"{int(target_val)} {meta['unit']}",
-                        "action": f"Optimize antihypertensive therapy & dietary sodium restriction to target < 120 mmHg.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        2.5, round(abs(item["attributionPercent"]) * 0.8, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{int(cur_val)} {meta['unit']}",
+                            "targetValue": f"{int(target_val)} {meta['unit']}",
+                            "action": f"Optimize antihypertensive therapy & dietary sodium restriction to target < 120 mmHg.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "diastolic_bp" and cur_val > 80:
                     target_val = 78.0
-                    impact_est = max(2.0, round(abs(item["attributionPercent"]) * 0.8, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{int(cur_val)} {meta['unit']}",
-                        "targetValue": f"{int(target_val)} {meta['unit']}",
-                        "action": f"Lifestyle modification and arterial elasticity support to target < 80 mmHg.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        2.0, round(abs(item["attributionPercent"]) * 0.8, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{int(cur_val)} {meta['unit']}",
+                            "targetValue": f"{int(target_val)} {meta['unit']}",
+                            "action": f"Lifestyle modification and arterial elasticity support to target < 80 mmHg.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "hba1c" and cur_val > 5.7:
                     target_val = 5.6
-                    impact_est = max(3.0, round(abs(item["attributionPercent"]) * 0.85, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{cur_val:.1f} {meta['unit']}",
-                        "targetValue": f"{target_val:.1f} {meta['unit']}",
-                        "action": f"Target glycemic control via metformin or dietary insulin-sparing protocol.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        3.0, round(abs(item["attributionPercent"]) * 0.85, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{cur_val:.1f} {meta['unit']}",
+                            "targetValue": f"{target_val:.1f} {meta['unit']}",
+                            "action": f"Target glycemic control via metformin or dietary insulin-sparing protocol.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "glucose" and cur_val > 100:
                     target_val = 95.0
-                    impact_est = max(1.5, round(abs(item["attributionPercent"]) * 0.7, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{int(cur_val)} {meta['unit']}",
-                        "targetValue": f"{int(target_val)} {meta['unit']}",
-                        "action": f"Fasting glucose management via exercise & carbohydrate restriction.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        1.5, round(abs(item["attributionPercent"]) * 0.7, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{int(cur_val)} {meta['unit']}",
+                            "targetValue": f"{int(target_val)} {meta['unit']}",
+                            "action": f"Fasting glucose management via exercise & carbohydrate restriction.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "bmi" and cur_val > 25:
                     target_val = 24.5
-                    impact_est = max(1.5, round(abs(item["attributionPercent"]) * 0.65, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{cur_val:.1f} {meta['unit']}",
-                        "targetValue": f"{target_val:.1f} {meta['unit']}",
-                        "action": f"5-7% weight reduction via calibrated aerobic conditioning.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        1.5, round(abs(item["attributionPercent"]) * 0.65, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{cur_val:.1f} {meta['unit']}",
+                            "targetValue": f"{target_val:.1f} {meta['unit']}",
+                            "action": f"5-7% weight reduction via calibrated aerobic conditioning.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "ldl" and cur_val > 100:
                     target_val = 90.0
-                    impact_est = max(1.5, round(abs(item["attributionPercent"]) * 0.7, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{int(cur_val)} {meta['unit']}",
-                        "targetValue": f"{int(target_val)} {meta['unit']}",
-                        "action": f"Lipid-lowering management (e.g. statin or dietary adjustment).",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
+                    impact_est = max(
+                        1.5, round(abs(item["attributionPercent"]) * 0.7, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{int(cur_val)} {meta['unit']}",
+                            "targetValue": f"{int(target_val)} {meta['unit']}",
+                            "action": f"Lipid-lowering management (e.g. statin or dietary adjustment).",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
                 elif col == "triglycerides" and cur_val > 150:
                     target_val = 130.0
-                    impact_est = max(1.5, round(abs(item["attributionPercent"]) * 0.6, 1))
-                    recourse_suggestions.append({
-                        "feature": col,
-                        "displayName": meta["displayName"],
-                        "currentValue": f"{int(cur_val)} {meta['unit']}",
-                        "targetValue": f"{int(target_val)} {meta['unit']}",
-                        "action": f"Omega-3 fatty acids and reduction of refined carbohydrates.",
-                        "estimatedRiskReduction": f"-{impact_est}%",
-                    })
-    
+                    impact_est = max(
+                        1.5, round(abs(item["attributionPercent"]) * 0.6, 1)
+                    )
+                    recourse_suggestions.append(
+                        {
+                            "feature": col,
+                            "displayName": meta["displayName"],
+                            "currentValue": f"{int(cur_val)} {meta['unit']}",
+                            "targetValue": f"{int(target_val)} {meta['unit']}",
+                            "action": f"Omega-3 fatty acids and reduction of refined carbohydrates.",
+                            "estimatedRiskReduction": f"-{impact_est}%",
+                        }
+                    )
+
     return {
         "task": task,
         "base_risk": round(base_prob, 4),
@@ -324,6 +364,7 @@ def explain_patient_prediction(
         "recourse_suggestions": recourse_suggestions[:3],
     }
 
+
 def get_global_feature_importance(task: str = "heart") -> Dict[str, Any]:
     """
     Computes global feature importance across representative multi-condition cohorts.
@@ -334,44 +375,73 @@ def get_global_feature_importance(task: str = "heart") -> Dict[str, Any]:
         # 1. Normotensive healthy baseline
         {col: FEATURE_MEDIANS[col] for col in FEATURE_COLUMNS},
         # 2. Hypertensive elderly
-        {**FEATURE_MEDIANS, "anchor_age": 72, "systolic_bp": 160, "diastolic_bp": 92, "ldl": 150},
+        {
+            **FEATURE_MEDIANS,
+            "anchor_age": 72,
+            "systolic_bp": 160,
+            "diastolic_bp": 92,
+            "ldl": 150,
+        },
         # 3. Uncontrolled diabetic
-        {**FEATURE_MEDIANS, "glucose": 195, "hba1c": 8.8, "bmi": 33.2, "triglycerides": 230},
+        {
+            **FEATURE_MEDIANS,
+            "glucose": 195,
+            "hba1c": 8.8,
+            "bmi": 33.2,
+            "triglycerides": 230,
+        },
         # 4. Metabolic syndrome
-        {**FEATURE_MEDIANS, "bmi": 32.0, "systolic_bp": 142, "glucose": 138, "hba1c": 6.9, "hdl": 38},
+        {
+            **FEATURE_MEDIANS,
+            "bmi": 32.0,
+            "systolic_bp": 142,
+            "glucose": 138,
+            "hba1c": 6.9,
+            "hdl": 38,
+        },
         # 5. Mixed cardiovascular & renal profile
-        {**FEATURE_MEDIANS, "anchor_age": 68, "creatinine": 1.8, "systolic_bp": 148, "ldl": 140},
+        {
+            **FEATURE_MEDIANS,
+            "anchor_age": 68,
+            "creatinine": 1.8,
+            "systolic_bp": 148,
+            "ldl": 140,
+        },
     ]
-    
+
     all_abs_attrs = np.zeros(len(FEATURE_COLUMNS), dtype=np.float32)
-    
+
     for prof in sample_profiles:
         x_std = standardize_features(prof)
         x_tensor = torch.tensor(x_std, dtype=torch.float32, device=engine.device)
         baseline = torch.zeros_like(x_tensor)
-        attrs, _, _ = integrated_gradients(engine.model, x_tensor, baseline, task=task, steps=30)
+        attrs, _, _ = integrated_gradients(
+            engine.model, x_tensor, baseline, task=task, steps=30
+        )
         all_abs_attrs += np.abs(attrs)
-        
+
     all_abs_attrs /= len(sample_profiles)
     total_impact = np.sum(all_abs_attrs) if np.sum(all_abs_attrs) > 1e-6 else 1.0
     normalized_weights = (all_abs_attrs / total_impact) * 100.0
-    
+
     ranked: List[Dict[str, Any]] = []
     for i, col in enumerate(FEATURE_COLUMNS):
         meta = FEATURE_METADATA.get(col, {})
-        ranked.append({
-            "feature": col,
-            "displayName": meta.get("displayName", col),
-            "category": meta.get("category", "General"),
-            "importance": round(float(all_abs_attrs[i]), 4),
-            "percentage": round(float(normalized_weights[i]), 1),
-            "rank": 0,
-        })
-        
+        ranked.append(
+            {
+                "feature": col,
+                "displayName": meta.get("displayName", col),
+                "category": meta.get("category", "General"),
+                "importance": round(float(all_abs_attrs[i]), 4),
+                "percentage": round(float(normalized_weights[i]), 1),
+                "rank": 0,
+            }
+        )
+
     ranked.sort(key=lambda x: x["percentage"], reverse=True)
     for idx, item in enumerate(ranked):
         item["rank"] = idx + 1
-        
+
     return {
         "task": task,
         "feature_count": len(FEATURE_COLUMNS),
