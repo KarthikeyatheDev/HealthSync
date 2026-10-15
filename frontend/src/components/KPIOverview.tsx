@@ -1,21 +1,24 @@
 import React from 'react';
-import { Building2, RotateCcw, Box, Crosshair, ArrowUpRight } from 'lucide-react';
-import { DashboardData } from '../types';
+import { Building2, RotateCcw, Box, Target, ArrowUpRight } from 'lucide-react';
+import { DashboardData, PredictionTask } from '../types';
 
 interface KPIOverviewProps {
   data: DashboardData | null;
+  activeTask?: PredictionTask;
 }
 
-export const KPIOverview: React.FC<KPIOverviewProps> = ({ data }) => {
+export const KPIOverview: React.FC<KPIOverviewProps> = ({ data, activeTask = 'heart' }) => {
   const sitesCount = data?.sites_count ?? 3;
   const completedRounds = data?.completed_rounds ?? 0;
   const currentRound = data?.current_round ?? 1;
   const globalVersion = data?.global_model?.version ?? 'v1.0.0';
-  const accuracy = data?.global_model?.accuracy ? (data.global_model.accuracy * 100).toFixed(1) : '50.0';
-  const delta = data?.global_model?.delta !== undefined 
-    ? (data.global_model.delta * 100).toFixed(1) 
-    : '0.0';
-  const isPositiveDelta = Number(delta) >= 0;
+
+  // AUROC is the clinical gold standard for imbalanced medical prediction
+  const hasEvaluation = completedRounds > 0 && data?.global_model;
+  const aurocVal = data?.global_model?.auroc ?? 0.500;
+  const f1Val = data?.global_model?.f1 ?? 0.0;
+  const aurocDisplay = hasEvaluation ? aurocVal.toFixed(3) : '0.500';
+  const taskLabel = activeTask === 'heart' ? 'CVD' : 'Diabetes';
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -59,17 +62,29 @@ export const KPIOverview: React.FC<KPIOverviewProps> = ({ data }) => {
         </div>
       </div>
 
-      {/* Card 4: Avg. Accuracy (Global Model) */}
+      {/* Card 4: AUROC Discrimination (C-Statistic) */}
       <div className="clinical-card p-5 flex items-center space-x-4">
-        <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-          <Crosshair className="w-6 h-6" />
+        <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 shrink-0">
+          <Target className="w-6 h-6" />
         </div>
         <div>
-          <div className="text-2xl font-bold text-[#24332e] tracking-tight">{accuracy}%</div>
-          <div className="text-xs font-semibold text-[#24332e] mt-0.5">Avg. Accuracy (Global Model)</div>
-          <div className="text-[11px] text-emerald-600 font-medium flex items-center mt-0.5">
-            <ArrowUpRight className="w-3.5 h-3.5 mr-0.5" />
-            <span>{isPositiveDelta ? `+${delta}%` : `${delta}%`} vs. previous round</span>
+          <div className="flex items-baseline space-x-2">
+            <span className="text-2xl font-bold text-[#24332e] font-mono tracking-tight">{aurocDisplay}</span>
+            <span className="text-[10px] font-semibold text-teal-800 bg-teal-100/70 px-1.5 py-0.5 rounded">
+              AUROC
+            </span>
+          </div>
+          <div className="text-xs font-semibold text-[#24332e] mt-0.5">
+            Model Discrimination ({taskLabel})
+          </div>
+          <div className="text-[11px] text-[#6c7771] mt-0.5">
+            {hasEvaluation ? (
+              <span className="text-emerald-700 font-medium">
+                C-Statistic • F1: {(f1Val * 100).toFixed(1)}%
+              </span>
+            ) : (
+              <span>Untrained Baseline (Random Chance)</span>
+            )}
           </div>
         </div>
       </div>

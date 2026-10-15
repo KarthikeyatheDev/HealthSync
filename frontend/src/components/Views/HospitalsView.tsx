@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building2, MapPin, Database, Shield, Cpu, Activity, CheckCircle2 } from 'lucide-react';
 import { HospitalSite } from '../../types';
+import { getSettings } from '../../lib/api';
 
 interface HospitalsViewProps {
   sites: HospitalSite[];
 }
 
 export const HospitalsView: React.FC<HospitalsViewProps> = ({ sites }) => {
+  const [networkSettings, setNetworkSettings] = useState<any>(null);
+
+  useEffect(() => {
+    getSettings()
+      .then((cfg) => setNetworkSettings(cfg))
+      .catch((err) => console.warn('Could not load settings in HospitalsView:', err));
+  }, []);
   const hospitalDetails = [
     {
       id: 'hospital_a',
@@ -107,9 +115,17 @@ export const HospitalsView: React.FC<HospitalsViewProps> = ({ sites }) => {
                     <span className="text-[#6c7771]">Local Model Artifact</span>
                     <span className="font-mono text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">{h.activeModel}</span>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-slate-100">
+                  <div className="flex justify-between py-1.5 border-b border-slate-100 items-center">
                     <span className="text-[#6c7771]">Privacy Boundary</span>
-                    <span className="text-[11px] text-indigo-700 font-medium">{h.privacyBudget}</span>
+                    {networkSettings && networkSettings.differentialPrivacy === false ? (
+                      <span className="text-[11px] text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded">
+                        DP Inactive (Raw Weights)
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-indigo-700 font-semibold bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
+                        ε = {networkSettings?.epsilon || '1.2'} (Local DP active)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

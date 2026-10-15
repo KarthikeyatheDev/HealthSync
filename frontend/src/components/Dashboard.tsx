@@ -96,7 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Row 1: KPI Overview Cards */}
-      <KPIOverview data={data} />
+      <KPIOverview data={data} activeTask={activeTask} />
 
       {/* Row 2: Network Topology & Live Training Telemetry */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
@@ -116,9 +116,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Row 3: Model Performance Curves & Real-Time Clinical Inference */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Performance Chart: Accuracy & Loss (7 cols) */}
+        {/* Performance Chart: AUROC Discrimination & Loss (7 cols) */}
         <div className="lg:col-span-7 flex flex-col">
-          <PerformanceChart rounds={rounds} />
+          <PerformanceChart rounds={rounds} activeTask={activeTask} />
         </div>
 
         {/* Clinical Prediction & Risk Inference (5 cols) */}
