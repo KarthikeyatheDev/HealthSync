@@ -89,19 +89,19 @@ export const PerformanceXAI: React.FC<PerformanceXAIProps> = ({ activeTask }) =>
 
   const currentPreset = presets.find(p => p.id === selectedPresetId);
 
-  // Category badge colors
+  // Category badge colors matching clinical waterfall design
   const getCategoryBadgeClass = (category: string) => {
     switch (category) {
-      case 'Hemodynamic':
-        return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'Metabolic':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'Lipid Profile':
-        return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'Demographic':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+        return 'bg-rose-50/80 text-rose-700 border-rose-200/80';
+      case 'Metabolic':
+        return 'bg-amber-50/80 text-amber-800 border-amber-200/80';
+      case 'Hemodynamic':
+        return 'bg-blue-50/80 text-blue-700 border-blue-200/80';
+      case 'Lipid Profile':
+        return 'bg-purple-50/80 text-purple-700 border-purple-200/80';
       default:
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        return 'bg-teal-50/80 text-teal-700 border-teal-200/80';
     }
   };
 
@@ -250,81 +250,128 @@ export const PerformanceXAI: React.FC<PerformanceXAIProps> = ({ activeTask }) =>
             </div>
           )}
 
-          {/* Integrated Gradients Waterfall Feature List */}
+          {/* Bidirectional Waterfall Risk Decomposition Graph matching clinical screenshot */}
           {explanation && (
-            <div className="clinical-card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-bold text-[#24332e]">
-                    Biomarker Risk Attribution Decomposition
-                  </h3>
-                  <p className="text-xs text-[#6c7771] mt-0.5">
-                    Decomposes how each patient vital pushes probability above (+) or below (-) baseline.
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3 text-xs">
-                  <span className="flex items-center space-x-1.5 text-rose-700">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>
-                    <span>Adverse Risk Driver</span>
-                  </span>
-                  <span className="flex items-center space-x-1.5 text-emerald-700">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
-                    <span>Protective Factor</span>
-                  </span>
-                </div>
+            <div className="space-y-3">
+              {/* Context Banner */}
+              <div className="px-1">
+                <h3 className="text-base sm:text-lg font-bold text-[#1e293b] tracking-tight">
+                  Waterfall risk decomposition isolates the precise physiological drivers of elevated clinical risk.
+                </h3>
+                <p className="text-xs sm:text-sm text-[#64748b] mt-0.5">
+                  An additive breakdown reveals exactly how specific patient vitals push probability above or below baseline.
+                </p>
               </div>
 
-              {/* Attribution Rows */}
-              <div className="space-y-2.5">
-                {explanation.features.map((feat) => {
-                  const isDriver = feat.attribution > 0;
-                  const absPct = Math.min(100, Math.abs(feat.attributionPercent) * 2.5); // scaled visual bar
+              {/* White Card Container */}
+              <div className="clinical-card p-6 sm:p-7">
+                {/* Card Header & Legend */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[#1e293b]">
+                      Biomarker Risk Attribution Decomposition
+                    </h4>
+                    <p className="text-xs text-[#64748b] mt-0.5">
+                      Decomposes how each patient vital pushes probability above (+) or below (-) baseline.
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-4 text-xs shrink-0">
+                    <span className="flex items-center space-x-1.5 text-slate-700">
+                      <span className="w-3 h-3 rounded-[3px] bg-[#e11d48]"></span>
+                      <span className="font-medium">Adverse Risk Driver</span>
+                    </span>
+                    <span className="flex items-center space-x-1.5 text-slate-700">
+                      <span className="w-3 h-3 rounded-[3px] bg-[#10b981]"></span>
+                      <span className="font-medium">Protective Factor</span>
+                    </span>
+                  </div>
+                </div>
 
-                  return (
-                    <div
-                      key={feat.feature}
-                      className="p-2.5 rounded-xl border border-slate-100 bg-[#fbfcfc] hover:bg-slate-50/80 transition-colors"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs mb-1.5">
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${getCategoryBadgeClass(feat.category)}`}>
-                            {feat.category}
-                          </span>
-                          <span className="font-semibold text-[#24332e]">
-                            {feat.displayName}
-                          </span>
-                          <span className="text-[#6c7771] font-mono text-[11px]">
-                            = {feat.value} {feat.unit}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            (ref: {feat.normalRange})
-                          </span>
-                        </div>
+                {/* Bidirectional Diverging Waterfall Rows */}
+                <div className="overflow-x-auto pt-2">
+                  <div className="min-w-[840px]">
+                    {(() => {
+                      const maxAttrPct = Math.max(
+                        ...explanation.features.map(f => Math.abs(f.attributionPercent)),
+                        4.0
+                      );
+                      const maxBarPx = 220; // maximum visual bar length in pixels
 
-                        <div className="flex items-center space-x-2 self-end sm:self-auto font-mono text-xs">
-                          <span className={`font-bold ${
-                            isDriver ? 'text-rose-600' : 'text-emerald-700'
-                          }`}>
-                            {isDriver ? '+' : ''}{feat.attributionPercent.toFixed(1)}%
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {isDriver ? 'increases risk' : 'protective'}
-                          </span>
-                        </div>
-                      </div>
+                      return explanation.features.map((feat) => {
+                        const isDriver = feat.attribution > 0.0005;
+                        const isProtective = feat.attribution < -0.0005;
+                        const isNeutral = !isDriver && !isProtective;
+                        const barWidth = Math.max(8, Math.min(maxBarPx, (Math.abs(feat.attributionPercent) / maxAttrPct) * maxBarPx));
 
-                      {/* Visual Diverging Bar */}
-                      <div className="w-full bg-slate-200/60 rounded-full h-1.5 overflow-hidden flex">
-                        <div
-                          className={`h-full transition-all duration-500 rounded-full ${
-                            isDriver ? 'bg-rose-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.max(4, absPct)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                        return (
+                          <div
+                            key={feat.feature}
+                            className="flex items-center border-b border-slate-100/90 py-3 hover:bg-slate-50/50 transition-colors"
+                          >
+                            {/* Left Half (0% to 50%): Biomarker Info + Protective Bar */}
+                            <div className="w-1/2 flex items-center justify-between pr-3 gap-2">
+                              {/* Metadata on the far left */}
+                              <div className="flex items-center space-x-2 min-w-0 flex-1 truncate pr-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded border font-medium shrink-0 ${getCategoryBadgeClass(feat.category)}`}>
+                                  {feat.category}
+                                </span>
+                                <span className="text-xs font-semibold text-[#1e293b] shrink-0">
+                                  {feat.displayName}
+                                </span>
+                                <span className="text-xs text-[#64748b] font-mono shrink-0">
+                                  = {feat.value} {feat.unit}
+                                </span>
+                                <span className="text-[11px] text-slate-400 shrink-0">
+                                  (ref: {feat.normalRange})
+                                </span>
+                              </div>
+
+                              {/* Protective Bar Area (aligned right, touches center line) */}
+                              <div className="flex items-center justify-end space-x-2 shrink-0">
+                                {isProtective && (
+                                  <>
+                                    <span className="text-xs whitespace-nowrap">
+                                      <strong className="text-[#059669] font-bold">-{Math.abs(feat.attributionPercent).toFixed(1)}%</strong>{' '}
+                                      <span className="text-slate-600 font-normal">protective</span>
+                                    </span>
+                                    <div
+                                      className="h-6 bg-[#10b981] rounded-l-md transition-all duration-500"
+                                      style={{ width: `${barWidth}px` }}
+                                    />
+                                  </>
+                                )}
+                                {isNeutral && (
+                                  <span className="text-xs text-slate-500 whitespace-nowrap font-medium pr-1">
+                                    0.0% protective
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Center 0% Baseline Vertical Line */}
+                            <div className="w-[1.5px] h-8 bg-slate-300 shrink-0 self-center" />
+
+                            {/* Right Half (50% to 100%): Adverse Bar */}
+                            <div className="w-1/2 flex items-center justify-start pl-3 gap-2">
+                              {isDriver && (
+                                <div className="flex items-center justify-start space-x-2">
+                                  <div
+                                    className="h-6 bg-[#e11d48] rounded-r-md transition-all duration-500"
+                                    style={{ width: `${barWidth}px` }}
+                                  />
+                                  <span className="text-xs whitespace-nowrap">
+                                    <strong className="text-[#e11d48] font-bold">+{feat.attributionPercent.toFixed(1)}%</strong>{' '}
+                                    <span className="text-slate-600 font-normal">increases risk</span>
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
               </div>
             </div>
           )}
